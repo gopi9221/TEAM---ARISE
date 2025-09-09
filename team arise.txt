@@ -1,0 +1,55 @@
+import os
+import fitz  # PyMuPDF
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.vectorstores import FAISS
+from langchain.llms import OpenAI
+from langchain.chains.question_answering import load_qa_chain
+from langchain.text_splitter import CharacterTextSplitter
+from langchain.docstore.document import Document
+
+# Set your OpenAI API key
+os.environ["OPENAI_API_KEY"] = "your-openai-api-key"
+
+# Function to extract text from a PDF
+def extract_text_from_pdf(pdf_path):
+    doc = fitz.open(pdf_path)
+    text = ""
+    for page in doc:
+        text += page.get_text()
+    return text
+
+# Load and split the document
+def process_pdf_to_docs(pdf_path):
+    raw_text = extract_text_from_pdf(pdf_path)
+    splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+    texts = splitter.split_text(raw_text)
+    docs = [Document(page_content=t) for t in texts]
+    return docs
+
+# Create a vector store using FAISS
+def create_vector_store(docs):
+    embeddings = OpenAIEmbeddings()
+    vectorstore = FAISS.from_documents(docs, embeddings)
+    return vectorstore
+
+# Answer questions using GPT
+def answer_question(vectorstore, query):
+    llm = OpenAI(temperature=0)
+    chain = load_qa_chain(llm, chain_type="stuff")
+    relevant_docs = vectorstore.similarity_search(query)
+    answer = chain.run(input_documents=relevant_docs, question=query)
+    return answer
+
+# === MAIN EXECUTION ===
+if _name_ == "_main_":
+    pdf_path = "your_pdf_file.pdf"  # Replace with your PDF path
+    docs = process_pdf_to_docs(pdf_path)
+    vectorstore = create_vector_store(docs)
+
+    print("PDF loaded. You can now ask questions!")
+    while True:
+        query = input("\nYour question (or type 'exit'): ")
+        if query.lower() == "exit":
+            break
+        response = answer_question(vectorstore, query)
+        print(f"\nAnswer: {response}")
